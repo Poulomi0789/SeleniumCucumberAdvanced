@@ -7,31 +7,13 @@ pipeline {
     }
 
     parameters {
-        // 1. Environment Selection
-        choice(
-            name: 'ENVIRONMENT', 
-            choices: ['qa', 'dev', 'prod'], 
-            description: 'Select which environment properties file to use (qa.properties vs dev.properties)'
-        )
-        
-        // 2. Parallel Thread Count
-        string(
-            name: 'THREADS', 
-            defaultValue: '2', 
-            description: 'How many browser instances to run at once'
-        )
-
-        // 3. Optional: Test Tag Selection (Smoke vs Regression)
-        choice(
-            name: 'TAGS', 
-            choices: ['@smoke', '@regression', '@all'], 
-            description: 'Filter which scenarios to run'
-        )
+        choice(name: 'ENVIRONMENT', choices: ['qa', 'dev', 'prod'], description: 'Select properties file')
+        string(name: 'THREADS', defaultValue: '2', description: 'Parallel browser count')
+        choice(name: 'TAGS', choices: ['@smoke', '@regression', '@all'], description: 'Cucumber tags')
     }
+
     environment {
         ALLURE_RESULTS = 'target/allure-results'
-        GIT_URL = 'https://github.com/Poulomi0789/SeleniumCucumberAdvanced.git'
-        GIT_BRANCH = 'main'
         EMAIL_RECIPIENTS = 'poulomidas89@gmail.com'
     }
 
@@ -47,38 +29,32 @@ pipeline {
             steps {
                 script {
                     try {
-                        // -Denv: Switched based on Jenkins parameter
-                        // -Ddataproviderthreadcount: Controls Cucumber parallel execution
-                        sh "mvn clean test -Denv=${params.ENVIRONMENT} -Ddataproviderthreadcount=${params.THREADS}"
+                        // Added -Dcucumber.filter.tags to use your TAGS parameter
+                        sh "mvn clean test -Denv=${params.ENVIRONMENT} -Ddataproviderthreadcount=${params.THREADS} -Dcucumber.filter.tags=${params.TAGS}"
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
                         echo "Tests failed, proceeding to report generation..."
                     }
                 }
             }
-                    stage('Generate & Zip Report') {
-            steps {
-                // Generates the static HTML site in target/site/allure-maven-plugin
-                sh 'mvn io.qameta.allure:allure-maven:report'
+        }
 
+        stage('Generate & Zip Report') {
+            steps {
+                sh 'mvn io.qameta.allure:allure-maven:report'
                 script {
                     if (fileExists('target/site/allure-maven-plugin')) {
                         zip zipFile: 'allure-report.zip',
                             dir: 'target/site/allure-maven-plugin',
                             archive: true
-                    } else {
-                        echo "Warning: Allure report directory not found, skipping zip."
                     }
                 }
             }
         }
 
-        stage('Publish to Jenkins') {
+        stage('Publish Results') {
             steps {
-                // Tells Jenkins Allure plugin where to find the raw results
-                allure includeProperties: false, results: [
-                    [path: 'target/allure-results']
-                ]
+                allure includeProperties: false, results: [[path: 'target/allure-results']]
             }
         }
     }
@@ -91,36 +67,34 @@ pipeline {
 
         success {
             emailext(
-                subject: "✅ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                subject: "✅ SUCCESS: UI Tests ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """<h2>Build Successful 🚀</h2>
-                         <b>Environment:</b> ${params.TEST_ENV} <br>
+                         <b>Environment:</b> ${params.ENVIRONMENT} <br>
                          <b>Tags Run:</b> ${params.TAGS} <br>
                          <b>Allure Report:</b> <a href="${env.BUILD_URL}allure">View Online</a>""",
                 attachmentsPattern: 'allure-report.zip',
-                mimeType: 'text/html',
-                to: "${EMAIL_RECIPIENTS}"
+                to: "${env.EMAIL_RECIPIENTS}"
             )
         }
 
         unstable {
             emailext(
-                subject: "⚠️ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                subject: "⚠️ UNSTABLE: UI Tests ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """<h2>Tests Failed ⚠️</h2>
-                         <b>Environment:</b> ${params.TEST_ENV} <br>
-                         <b>Check Allure for details:</b> <a href="${env.BUILD_URL}allure">View Report</a>""",
+                         <b>Environment:</b> ${params.ENVIRONMENT} <br>
+                         <b>Check Allure:</b> <a href="${env.BUILD_URL}allure">View Report</a>""",
                 attachmentsPattern: 'allure-report.zip',
-                mimeType: 'text/html',
-                to: "${EMAIL_RECIPIENTS}"
+                to: "${env.EMAIL_RECIPIENTS}"
             )
         }
 
         failure {
             emailext(
-                subject: "❌ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                subject: "❌ FAILURE: UI Test ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """<h2>Pipeline Error ❌</h2>
-                         <b>The build crashed before finishing.</b><br>
+                         <b>Build crashed.</b><br>
                          <a href="${env.BUILD_URL}console">Console Output</a>""",
-                to: "${EMAIL_RECIPIENTS}"
+                to: "${env.EMAIL_RECIPIENTS}"
             )
         }
     }

@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'markhobson/maven-chrome:jdk-17'
-            args '-u root --shm-size=2g'
+            args '--shm-size=2g -v $HOME/.m2:/home/jenkins/.m2'
         }
     }
 

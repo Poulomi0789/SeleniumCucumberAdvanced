@@ -1,18 +1,33 @@
 pipeline {
     agent {
-        // This tells Jenkins to build the Docker image and run the steps inside it
-        dockerfile {
-            filename 'Dockerfile'
-            // Ensures the container has enough memory for browser execution
-            args '--shm-size=2g'
+        docker { 
+            image 'markhobson/maven-chrome:jdk-17' 
+            args '-u root --shm-size=2g'
         }
     }
 
     parameters {
-        choice(name: 'ENVIRONMENT', choices: ['qa', 'dev'], description: 'Select Test Environment')
-        string(name: 'THREADS', defaultValue: '4', description: 'Number of parallel threads')
-    }
+        // 1. Environment Selection
+        choice(
+            name: 'ENVIRONMENT', 
+            choices: ['qa', 'dev', 'prod'], 
+            description: 'Select which environment properties file to use (qa.properties vs dev.properties)'
+        )
+        
+        // 2. Parallel Thread Count
+        string(
+            name: 'THREADS', 
+            defaultValue: '2', 
+            description: 'How many browser instances to run at once'
+        )
 
+        // 3. Optional: Test Tag Selection (Smoke vs Regression)
+        choice(
+            name: 'TAGS', 
+            choices: ['@smoke', '@regression', '@all'], 
+            description: 'Filter which scenarios to run'
+        )
+    }
     environment {
         ALLURE_RESULTS = 'target/allure-results'
     }

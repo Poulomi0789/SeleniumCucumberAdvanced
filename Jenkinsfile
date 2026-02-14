@@ -56,6 +56,30 @@ pipeline {
                     }
                 }
             }
+                    stage('Generate & Zip Report') {
+            steps {
+                // Generates the static HTML site in target/site/allure-maven-plugin
+                sh 'mvn io.qameta.allure:allure-maven:report'
+
+                script {
+                    if (fileExists('target/site/allure-maven-plugin')) {
+                        zip zipFile: 'allure-report.zip',
+                            dir: 'target/site/allure-maven-plugin',
+                            archive: true
+                    } else {
+                        echo "Warning: Allure report directory not found, skipping zip."
+                    }
+                }
+            }
+        }
+
+        stage('Publish to Jenkins') {
+            steps {
+                // Tells Jenkins Allure plugin where to find the raw results
+                allure includeProperties: false, results: [
+                    [path: 'target/allure-results']
+                ]
+            }
         }
     }
 

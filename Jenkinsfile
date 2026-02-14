@@ -30,6 +30,9 @@ pipeline {
     }
     environment {
         ALLURE_RESULTS = 'target/allure-results'
+        GIT_URL = 'https://github.com/Poulomi0789/SeleniumCucumberAdvanced.git'
+        GIT_BRANCH = 'main'
+        EMAIL_RECIPIENTS = 'poulomidas89@gmail.com'
     }
 
     stages {
@@ -58,28 +61,43 @@ pipeline {
 
     post {
         always {
-            // Generate Allure Report
-            script {
-                allure includeProperties: false,
-                       jdk: '',
-                       results: [[path: "${env.ALLURE_RESULTS}"]]
-            }
-        }
-
-        failure {
-            emailext body: """
-                <h3>UI Automation Build Failed</h3>
-                <p>Build: ${env.BUILD_URL}</p>
-                <p>Check the attached Allure Report for screenshots of failed steps.</p>
-            """,
-            subject: "ALERT: UI Test Failure - ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-            to: 'qa-team@company.com'
+            archiveArtifacts artifacts: '**/*.log', allowEmptyArchive: true
+            junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
         }
 
         success {
-            emailext body: "UI Automation passed successfully. Build: ${env.BUILD_URL}",
-                     subject: "SUCCESS: UI Test Passed - ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                     to: 'qa-team@company.com'
+            emailext(
+                subject: "✅ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """<h2>Build Successful 🚀</h2>
+                         <b>Environment:</b> ${params.TEST_ENV} <br>
+                         <b>Tags Run:</b> ${params.TAGS} <br>
+                         <b>Allure Report:</b> <a href="${env.BUILD_URL}allure">View Online</a>""",
+                attachmentsPattern: 'allure-report.zip',
+                mimeType: 'text/html',
+                to: "${EMAIL_RECIPIENTS}"
+            )
+        }
+
+        unstable {
+            emailext(
+                subject: "⚠️ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """<h2>Tests Failed ⚠️</h2>
+                         <b>Environment:</b> ${params.TEST_ENV} <br>
+                         <b>Check Allure for details:</b> <a href="${env.BUILD_URL}allure">View Report</a>""",
+                attachmentsPattern: 'allure-report.zip',
+                mimeType: 'text/html',
+                to: "${EMAIL_RECIPIENTS}"
+            )
+        }
+
+        failure {
+            emailext(
+                subject: "❌ Selenium Cucumber Tests Passed | ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """<h2>Pipeline Error ❌</h2>
+                         <b>The build crashed before finishing.</b><br>
+                         <a href="${env.BUILD_URL}console">Console Output</a>""",
+                to: "${EMAIL_RECIPIENTS}"
+            )
         }
     }
 }
